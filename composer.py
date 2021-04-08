@@ -17,6 +17,9 @@ import glob
 import random
 from pydub import AudioSegment
 from pydub.playback import _play_with_simpleaudio as play
+import pickle
+import socket
+
 
 # global vars and paths
 instrument_path = 'datasets/mock/song/resample/accompaniment/*.wav'
@@ -156,11 +159,17 @@ class Composer:
         # timer var
         self.go_bang = True
 
+        # client-server vars
+        self.PORT = 65432
+        self.HOST = "127.0.0.1"
+        self.emr_input_stream = 0
+
     async def singing_actor(self):
         while self.go_bang:
             print("  child1: started singing voice")
 
-            if random.randrange(100) < 65:
+            # if random.randrange(100) < 65:
+            if self.emr_input_stream < 65:
                 play_length = self.singing_bot.audio_composer()
                 await trio.sleep(play_length + 1)
 
@@ -173,7 +182,8 @@ class Composer:
         while self.go_bang:
             print("  child2: started singing voice")
 
-            if random.randrange(100) < 65:
+            # if random.randrange(100) < 65:
+            if self.emr_input_stream < 65:
                 play_length = self.sound_design_bot.audio_composer()
                 await trio.sleep(play_length + 1)
 
@@ -187,7 +197,8 @@ class Composer:
         while self.go_bang:
             print("  child3: started singing voice")
 
-            if random.randrange(100) < 25:
+            # if random.randrange(100) < 25:
+            if self.emr_input_stream < 25:
                 play_length = self.individual_word_bot.audio_composer()
                 await trio.sleep(play_length + 1)
 
@@ -200,7 +211,8 @@ class Composer:
         while self.go_bang:
             print("  child4: started singing voice")
 
-            if random.randrange(100) < 45:
+            # if random.randrange(100) < 45:
+            if self.emr_input_stream < 45:
                 play_length = self.full_play_bot.audio_composer()
                 await trio.sleep(play_length + 1)
 
@@ -213,7 +225,8 @@ class Composer:
         while self.go_bang:
             print("  child5: started orchestra")
 
-            if random.randrange(100) < 65:
+            # if self.emr_input_stream < 65:
+            if self.emr_input_stream < 65:
                 play_length = self.orchestra_bot.audio_composer()
                 await trio.sleep(play_length + 1)
 
@@ -227,12 +240,45 @@ class Composer:
         while self.go_bang:
             pass
 
-    async def nebula_listener(self):
-        while self.go_bang:
-            pass
+    # listens to the EMR Ai engine and parses the var to global
+    async def emr_engine_listener(self):
+        print("client: started!")
+        while True:
+            print(f"client: connecting to {self.HOST}:{self.PORT}")
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind((self.HOST, self.PORT))
+                s.listen()
+                client_stream, addr = s.accept()
+                with client_stream:
+                    print('Connected by', addr)
+                    while True:
+                        # get data from stream
+                        data = client_stream.recv(1024)
+                        data_loaded = pickle.loads(data)
+                        print(f"receiver: got data {data_loaded}")
+                        self.emr_input_stream = data_loaded * 100
+
+                        # # send it to the mincer for soundBot control
+                        # # NB play_with_simpleaudio does not hold thread
+                        # master_data = data_loaded['master_output']
+                        # rhythm_rate = data_loaded['rhythm_rate']
+                        # self.mincer(master_data, rhythm_rate)
+                        #
+                        # # send out-going data to server
+                        # send_data = pickle.dumps(self.send_data_dict, -1)
+                        # client_stream.sendall(send_data)
+
+        #
+        # while self.go_bang:
+        #     async for data in client_stream:
+        #         print(f"receiver: got data {data!r}")
+        #         load_data = pickle.loads(data)
+        #         self.emr_input_stream = load_data * 100
 
     async def main(self):
         print("parent: started!")
+        # print("parent: connecting to 127.0.0.1:{}".format(self.PORT))
+        # client_stream = await trio.open_tcp_stream(self.IP_ADDR, self.PORT)
 
         # starts the plate spinning
         async with trio.open_nursery() as nursery:
@@ -251,11 +297,11 @@ class Composer:
             print("parent: spawning child5...")
             nursery.start_soon(self.full_play_actor)
 
-            print("parent: spawning child6...")
+            # print("parent: spawning child6...")
             # nursery.start_soon(self.timer)
 
             print("parent: spawning child7...")
-            # nursery.start_soon(self.nebula_listener)
+            nursery.start_soon(self.emr_engine_listener)
 
         print("parent: all done!")
 
