@@ -9,7 +9,6 @@
 #
 
 # todo Fab to create visualiser (using images from Midsummer Night?
-# todo Fab to implement WaveGAN???? if we need it?
 
 import trio
 import glob
