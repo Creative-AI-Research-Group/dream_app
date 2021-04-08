@@ -60,14 +60,17 @@ class Audio:
         if self.keep_length == False:
             sound = self.random_length(sound)
 
+        # loop short words
         if self.loop:
-            # loop short words
-            rnd_loop_count = random.randrange (1, 9)
+            rnd_loop_count = random.randrange(1, 9)
             sound = sound * rnd_loop_count
+
+            # and make quieter
+            sound.apply_gain(0.7)
 
         if self.transform:
             # add shaping
-            sound  = self.random_design(sound)
+            sound = self.random_design(sound)
 
         # add pan
         if self.pan:
@@ -220,7 +223,7 @@ class Composer:
                 await trio.sleep(rnd_wait)
 
     async def individual_word_actor(self):
-        # todo FABRIZIO = replace with waveGAN generation
+        # todo FABRIZIO = replace with waveGAN generation?????
         while self.go_bang:
             print("  child3: started singing voice")
 
@@ -297,7 +300,7 @@ class Composer:
                 count += 1
                 await trio.sleep(rnd_sample_rate)
 
-    async def timer(self):
+    def timer(self):
         while self.go_bang:
             pass
 
@@ -351,12 +354,6 @@ class Composer:
 
             print("parent: spawning child6...")
             nursery.start_soon(self.director)
-
-            # print("parent: spawning child6...")
-            # nursery.start_soon(self.timer)
-
-            # print("parent: spawning child7...")
-            # nursery.start_soon(self.emr_engine_listener)
 
         print("parent: all done!")
 
