@@ -8,9 +8,7 @@
 #
 #
 
-# todo binaural
-# todo implement nebula
-# todo
+# todo Fab
 
 import trio
 import glob
