@@ -8,7 +8,8 @@
 #
 #
 
-# todo Fab
+# todo Fab to create visualiser (using images from Midsummer Night?
+# todo Fab to implement WaveGAN???? if we need it?
 
 import trio
 import glob
@@ -20,6 +21,7 @@ import socket
 import wave
 import numpy
 import time
+import concurrent.futures
 
 
 # global vars and paths
@@ -182,7 +184,8 @@ class Composer:
         self.HOST = "127.0.0.1"
         self.emr_input_stream = 0
         self.read_director = 0
-        # build send data dict
+
+        # build send data dict for EMR engine
         self.send_data_dict = {'mic_level': 0,
                                'speed': 1,
                                'tempo': 0.1
@@ -222,7 +225,7 @@ class Composer:
             print("  child3: started singing voice")
 
             # if random.randrange(100) < 25:
-            if self.emr_input_stream < 25:
+            if self.emr_input_stream < 15:
                 play_length = self.individual_word_bot.audio_composer()
                 await trio.sleep(play_length + 1)
 
@@ -265,20 +268,23 @@ class Composer:
         while self.go_bang:
             print("  child6: started director array")
             # will read for 4 -16 seconds
-            rnd_duration_of_reading = random.randrange(4000, 16000)
+            rnd_duration_of_reading = random.randrange(4, 16)
             end_time = time.time() + rnd_duration_of_reading
 
-            # random read rate: 10k-44K
-            rnd_sample_rate = random.randrange(10000, 44000) / 60
+            # random read rate: 1k-4.4K per sec
+            rnd_sample_rate = random.randrange(1000, 4400) / 60000
 
             # start point of reading numpy array
             start_point = random.randrange(self.len_director_audio)
-            print(f'start point = {start_point}')
+            # print(f'start point = {start_point}, sample rate = {rnd_sample_rate}')
+
             # reads while in time
             count = 0
             while time.time() < end_time:
                 print(f'time, read point = {start_point + count}')
                 self.read_director = self.director_stream_audio[start_point + count]
+
+                # normalise it between 0 and 1
                 if self.read_director < 0:
                     self.read_director *= -1
                 if self.logging:
@@ -286,24 +292,25 @@ class Composer:
 
                 # add to send dict
                 self.send_data_dict['mic_level'] = self.read_director
+                # print(f"                mic level = {self.send_data_dict['mic_level']}")
 
                 count += 1
-                await trio.sleep(0.1)
+                await trio.sleep(rnd_sample_rate)
 
     async def timer(self):
         while self.go_bang:
             pass
 
     # listens to the EMR Ai engine and parses the var to global
-    async def emr_engine_listener(self, client_stream):
-        print("client: started!")
-        while True:
-            print(f"client: connecting to {self.HOST}:{self.PORT}")
-            # with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            #     s.bind((self.HOST, self.PORT))
-            #     s.listen()
-            #     client_stream, addr = s.accept()
+    def emr_engine_listener(self):
+        print("client: starting!")
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind((self.HOST, self.PORT))
+            s.listen()
+            client_stream, addr = s.accept()
+
             with client_stream:
+                print('Connected by', addr)
                 while True:
                     # get data from stream
                     data = client_stream.recv(1024)
@@ -313,19 +320,17 @@ class Composer:
                     self.emr_input_stream = data_loaded['master_output'] * 100
 
                     # send out-going data dict as pickle to server
-                    if self.logging:
-                        print(f'Child: Sending data = {self.read_director}')
+                    # if self.logging:
+                    #     print(f'Child: Sending data = {self.read_director}')
                     send_data = pickle.dumps(self.send_data_dict, -1)
                     client_stream.sendall(send_data)
+                    # await trio.sleep(0.01)
 
+    def parent_go(self):
+        trio.run(self.parent)
 
-    async def main(self):
+    async def parent(self):
         print("parent: started!")
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind((self.HOST, self.PORT))
-            s.listen()
-            client_stream, addr = s.accept()
-            print('Connected by', addr)
 
         # starts the plate spinning
         async with trio.open_nursery() as nursery:
@@ -350,11 +355,17 @@ class Composer:
             # print("parent: spawning child6...")
             # nursery.start_soon(self.timer)
 
-            print("parent: spawning child7...")
-            nursery.start_soon(self.emr_engine_listener, client_stream)
+            # print("parent: spawning child7...")
+            # nursery.start_soon(self.emr_engine_listener)
 
         print("parent: all done!")
 
+    def main(self):
+        tasks = [self.parent_go, self.emr_engine_listener]
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+            futures = {executor.submit(task): task for task in tasks}
+
 if __name__ == '__main__':
     dream_composer = Composer()
-    trio.run(dream_composer.main)
+    dream_composer.main()
