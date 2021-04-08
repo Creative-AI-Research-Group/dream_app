@@ -19,6 +19,9 @@ from pydub import AudioSegment
 from pydub.playback import _play_with_simpleaudio as play
 import pickle
 import socket
+import wave
+import numpy
+import time
 
 
 # global vars and paths
@@ -156,13 +159,36 @@ class Composer:
         self.individual_word_bot = Audio(word_path, transform=False, keep_length=True, pan=True, loop=True)
         self.full_play_bot = Audio(full_play_path, transform=False, keep_length=False, pan=True)
 
-        # timer var
+        # create the script/ director array
+        # Read file to get buffer:
+        ifile = wave.open('datasets/real_data/speech/forest_scene.wav')
+        samples = ifile.getnframes()
+        audio = ifile.readframes(samples)
+
+        # Convert buffer to float32 using NumPy
+        audio_as_np_int16 = numpy.frombuffer(audio, dtype=numpy.int16)
+        audio_as_np_float32 = audio_as_np_int16.astype(numpy.float32)
+
+        # Normalise float32 array so that values are between -1.0 and +1.0
+        max_int16 = 2 ** 15
+        self.director_stream_audio = audio_as_np_float32 / max_int16
+        self.len_director_audio = self.director_stream_audio.size
+        print(f'        director_stream length = {self.len_director_audio}')
+
+        # op var
         self.go_bang = True
+        self.logging = True
 
         # client-server vars
         self.PORT = 65432
         self.HOST = "127.0.0.1"
         self.emr_input_stream = 0
+        self.read_director = 0
+        # build send data dict
+        self.send_data_dict = {'mic_level': 0,
+                               'speed': 1,
+                               'tempo': 0.1
+                               }
 
     async def singing_actor(self):
         while self.go_bang:
@@ -235,50 +261,73 @@ class Composer:
                 rnd_wait = random.randrange(3, 8)
                 await trio.sleep(rnd_wait)
 
+    # reads from the radio play as numpy array which
+    # is sent to the EMR engine for affect input
+    async def director(self):
+        while self.go_bang:
+            print("  child6: started director array")
+            # will read for 4 -16 seconds
+            rnd_duration_of_reading = random.randrange(4000, 16000)
+            end_time = time.time() + rnd_duration_of_reading
+
+            # random read rate: 10k-44K
+            rnd_sample_rate = random.randrange(10000, 44000) / 60
+
+            # start point of reading numpy array
+            start_point = random.randrange(self.len_director_audio)
+            print(f'start point = {start_point}')
+            # reads while in time
+            count = 0
+            while time.time() < end_time:
+                print(f'time, read point = {start_point + count}')
+                self.read_director = self.director_stream_audio[start_point + count]
+                if self.read_director < 0:
+                    self.read_director *= -1
+                if self.logging:
+                    print(f'    read director = {self.read_director}')
+
+                # add to send dict
+                self.send_data_dict['mic_level'] = self.read_director
+
+                count += 1
+                await trio.sleep(0.1)
 
     async def timer(self):
         while self.go_bang:
             pass
 
     # listens to the EMR Ai engine and parses the var to global
-    async def emr_engine_listener(self):
+    async def emr_engine_listener(self, client_stream):
         print("client: started!")
         while True:
             print(f"client: connecting to {self.HOST}:{self.PORT}")
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind((self.HOST, self.PORT))
-                s.listen()
-                client_stream, addr = s.accept()
-                with client_stream:
-                    print('Connected by', addr)
-                    while True:
-                        # get data from stream
-                        data = client_stream.recv(1024)
-                        data_loaded = pickle.loads(data)
-                        print(f"receiver: got data {data_loaded}")
-                        self.emr_input_stream = data_loaded * 100
+            # with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            #     s.bind((self.HOST, self.PORT))
+            #     s.listen()
+            #     client_stream, addr = s.accept()
+            with client_stream:
+                while True:
+                    # get data from stream
+                    data = client_stream.recv(1024)
+                    data_loaded = pickle.loads(data)
+                    # if self.logging:
+                    #     print(f"receiver: got data {data_loaded}")
+                    self.emr_input_stream = data_loaded['master_output'] * 100
 
-                        # # send it to the mincer for soundBot control
-                        # # NB play_with_simpleaudio does not hold thread
-                        # master_data = data_loaded['master_output']
-                        # rhythm_rate = data_loaded['rhythm_rate']
-                        # self.mincer(master_data, rhythm_rate)
-                        #
-                        # # send out-going data to server
-                        # send_data = pickle.dumps(self.send_data_dict, -1)
-                        # client_stream.sendall(send_data)
+                    # send out-going data dict as pickle to server
+                    if self.logging:
+                        print(f'Child: Sending data = {self.read_director}')
+                    send_data = pickle.dumps(self.send_data_dict, -1)
+                    client_stream.sendall(send_data)
 
-        #
-        # while self.go_bang:
-        #     async for data in client_stream:
-        #         print(f"receiver: got data {data!r}")
-        #         load_data = pickle.loads(data)
-        #         self.emr_input_stream = load_data * 100
 
     async def main(self):
         print("parent: started!")
-        # print("parent: connecting to 127.0.0.1:{}".format(self.PORT))
-        # client_stream = await trio.open_tcp_stream(self.IP_ADDR, self.PORT)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind((self.HOST, self.PORT))
+            s.listen()
+            client_stream, addr = s.accept()
+            print('Connected by', addr)
 
         # starts the plate spinning
         async with trio.open_nursery() as nursery:
@@ -297,11 +346,14 @@ class Composer:
             print("parent: spawning child5...")
             nursery.start_soon(self.full_play_actor)
 
+            print("parent: spawning child6...")
+            nursery.start_soon(self.director)
+
             # print("parent: spawning child6...")
             # nursery.start_soon(self.timer)
 
             print("parent: spawning child7...")
-            nursery.start_soon(self.emr_engine_listener)
+            nursery.start_soon(self.emr_engine_listener, client_stream)
 
         print("parent: all done!")
 
