@@ -25,11 +25,11 @@ import concurrent.futures
 
 
 # global vars and paths
-instrument_path = 'datasets/mock/song/resample/accompaniment/*.wav'
-vocal_path = 'datasets/mock/song/resample/vocal/*.wav'
-environment_path = 'datasets/real_data/environmental_sounds/*.wav'
-word_path = 'datasets/real_data/wav/*.wav'
-full_play_path = 'datasets/real_data/speech/*.wav'
+instrument_path = 'audio/accompaniment/*.wav'
+vocal_path = 'audio/vocal/*.wav'
+environment_path = 'audio/environmental_sounds/*.wav'
+word_path = 'audio/wav/*.wav'
+full_play_path = 'audio/speech/*.wav'
 
 # instantiate a AudioBot for each actor
 class Audio:
@@ -164,7 +164,7 @@ class Composer:
 
         # create the script/ director array
         # Read file to get buffer:
-        ifile = wave.open('datasets/real_data/speech/forest_scene.wav')
+        ifile = wave.open('audio/speech/forest_scene.wav')
         samples = ifile.getnframes()
         audio = ifile.readframes(samples)
 
@@ -198,11 +198,16 @@ class Composer:
         while self.go_bang:
             print("  child1: started singing voice")
 
-            # if random.randrange(100) < 65:
-            if self.emr_input_stream < 65:
+            # decide whether to use EMR stream or RND
+            if random.randrange(2) == 1:
+                factor = random.randrange(100)
+            else:
+                factor = self.emr_input_stream
+
+            # decide if event or wait
+            if factor < 65:
                 play_length = self.singing_bot.audio_composer()
                 await trio.sleep(play_length + 1)
-
             else:
                 # wait 3 - 8 seconds
                 rnd_wait = random.randrange(3, 8)
@@ -212,26 +217,35 @@ class Composer:
         while self.go_bang:
             print("  child2: started singing voice")
 
-            # if random.randrange(100) < 65:
-            if self.emr_input_stream < 65:
+            # decide whether to use EMR stream or RND
+            if random.randrange(2) == 1:
+                factor = random.randrange(100)
+            else:
+                factor = self.emr_input_stream
+
+            # decide if event or wait
+            if factor < 65:
                 play_length = self.sound_design_bot.audio_composer()
                 await trio.sleep(play_length + 1)
-
             else:
                 # wait 3 - 8 seconds
                 rnd_wait = random.randrange(3, 8)
                 await trio.sleep(rnd_wait)
 
     async def individual_word_actor(self):
-        # todo FABRIZIO = replace with waveGAN generation?????
         while self.go_bang:
             print("  child3: started singing voice")
 
-            # if random.randrange(100) < 25:
-            if self.emr_input_stream < 15:
+            # decide whether to use EMR stream or RND
+            if random.randrange(2) == 1:
+                factor = random.randrange(100)
+            else:
+                factor = self.emr_input_stream
+
+            # decide if event or wait
+            if factor < 15:
                 play_length = self.individual_word_bot.audio_composer()
                 await trio.sleep(play_length + 1)
-
             else:
                 # wait 3 - 8 seconds
                 rnd_wait = random.randrange(3, 8)
@@ -241,11 +255,16 @@ class Composer:
         while self.go_bang:
             print("  child4: started singing voice")
 
-            # if random.randrange(100) < 45:
-            if self.emr_input_stream < 45:
+            # decide whether to use EMR stream or RND
+            if random.randrange(2) == 1:
+                factor = random.randrange(100)
+            else:
+                factor = self.emr_input_stream
+
+            # decide if event or wait
+            if factor < 45:
                 play_length = self.full_play_bot.audio_composer()
                 await trio.sleep(play_length + 1)
-
             else:
                 # wait 3 - 8 seconds
                 rnd_wait = random.randrange(3, 8)
@@ -255,11 +274,16 @@ class Composer:
         while self.go_bang:
             print("  child5: started orchestra")
 
-            # if self.emr_input_stream < 65:
-            if self.emr_input_stream < 65:
+            # decide whether to use EMR stream or RND
+            if random.randrange(2) == 1:
+                factor = random.randrange(100)
+            else:
+                factor = self.emr_input_stream
+
+            # decide if event or wait
+            if factor < 65:
                 play_length = self.orchestra_bot.audio_composer()
                 await trio.sleep(play_length + 1)
-
             else:
                 # wait 3 - 8 seconds
                 rnd_wait = random.randrange(3, 8)
@@ -279,12 +303,14 @@ class Composer:
 
             # start point of reading numpy array
             start_point = random.randrange(self.len_director_audio)
-            # print(f'start point = {start_point}, sample rate = {rnd_sample_rate}')
+            if self.logging:
+                print(f'start point = {start_point}, sample rate = {rnd_sample_rate}')
 
             # reads while in time
             count = 0
             while time.time() < end_time:
-                print(f'time, read point = {start_point + count}')
+                if self.logging:
+                    print(f'Strating loop. read point = {start_point + count}')
                 self.read_director = self.director_stream_audio[start_point + count]
 
                 # normalise it between 0 and 1
@@ -295,7 +321,8 @@ class Composer:
 
                 # add to send dict
                 self.send_data_dict['mic_level'] = self.read_director
-                # print(f"                mic level = {self.send_data_dict['mic_level']}")
+                if self.logging:
+                    print(f"                mic level = {self.send_data_dict['mic_level']}")
 
                 count += 1
                 await trio.sleep(rnd_sample_rate)
@@ -318,16 +345,15 @@ class Composer:
                     # get data from stream
                     data = client_stream.recv(1024)
                     data_loaded = pickle.loads(data)
-                    # if self.logging:
-                    #     print(f"receiver: got data {data_loaded}")
+                    if self.logging:
+                        print(f"receiver: got data {data_loaded}")
                     self.emr_input_stream = data_loaded['master_output'] * 100
 
                     # send out-going data dict as pickle to server
-                    # if self.logging:
-                    #     print(f'Child: Sending data = {self.read_director}')
+                    if self.logging:
+                        print(f'Child: Sending data = {self.read_director}')
                     send_data = pickle.dumps(self.send_data_dict, -1)
                     client_stream.sendall(send_data)
-                    # await trio.sleep(0.01)
 
     def parent_go(self):
         trio.run(self.parent)
