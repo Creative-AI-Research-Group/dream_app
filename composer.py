@@ -56,6 +56,7 @@ class Audio:
             print('sound file = ', sound_file)
         sound = AudioSegment.from_wav(sound_file)
 
+        # keep length if short
         if self.keep_length == False:
             sound = self.random_length(sound)
 
@@ -67,8 +68,8 @@ class Audio:
             # and make quieter
             sound.apply_gain(0.7)
 
+        # add shaping
         if self.transform:
-            # add shaping
             sound = self.random_design(sound)
 
         # add pan
@@ -78,9 +79,10 @@ class Audio:
                 print(f'pan = {rnd_pan}')
             sound = sound.pan(rnd_pan)
 
+        # calc new length for Trio wait
         play_length = sound.duration_seconds
 
-        # plays sound
+        # plays sound using Simpleaudio (NO WAITING)
         play(sound)
 
         return play_length
@@ -177,7 +179,7 @@ class Composer:
         self.len_director_audio = self.director_stream_audio.size
         print(f'        director_stream length = {self.len_director_audio}')
 
-        # op var
+        # operational vars
         self.go_bang = True
         self.logging = True
 
@@ -187,12 +189,13 @@ class Composer:
         self.emr_input_stream = 0
         self.read_director = 0
 
-        # build send data dict for EMR engine
+        # build send data dict to match input for EMR engine
         self.send_data_dict = {'mic_level': 0,
                                'speed': 1,
                                'tempo': 0.1
                                }
 
+    # Spleetered voice from original songs
     async def singing_actor(self):
         while self.go_bang:
             print("  child1: started singing voice")
@@ -212,6 +215,7 @@ class Composer:
                 rnd_wait = random.randrange(3, 8)
                 await trio.sleep(rnd_wait)
 
+    # environmental sound (Binaural)
     async def sound_design_actor(self):
         while self.go_bang:
             print("  child2: started singing voice")
@@ -231,6 +235,7 @@ class Composer:
                 rnd_wait = random.randrange(3, 8)
                 await trio.sleep(rnd_wait)
 
+    # words from Watson stripping process
     async def individual_word_actor(self):
         while self.go_bang:
             print("  child3: started singing voice")
@@ -250,6 +255,7 @@ class Composer:
                 rnd_wait = random.randrange(3, 8)
                 await trio.sleep(rnd_wait)
 
+    # full radio play
     async def full_play_actor(self):
         while self.go_bang:
             print("  child4: started singing voice")
@@ -269,6 +275,7 @@ class Composer:
                 rnd_wait = random.randrange(3, 8)
                 await trio.sleep(rnd_wait)
 
+    # Spleetered orchestra from original songs
     async def orchestra_actor(self):
         while self.go_bang:
             print("  child5: started orchestra")
@@ -326,6 +333,7 @@ class Composer:
                 count += 1
                 await trio.sleep(rnd_sample_rate)
 
+    # not being used, but can control overall duration of required
     def timer(self):
         while self.go_bang:
             pass
@@ -354,9 +362,11 @@ class Composer:
                     send_data = pickle.dumps(self.send_data_dict, -1)
                     client_stream.sendall(send_data)
 
+    # starts Trio running
     def parent_go(self):
         trio.run(self.parent)
 
+    # Trio starts nursery for all audio engines
     async def parent(self):
         print("parent: started!")
 
@@ -382,6 +392,7 @@ class Composer:
 
         print("parent: all done!")
 
+    # main async: splits into 2 main operations: Trio and server-client conn
     def main(self):
         tasks = [self.parent_go, self.emr_engine_listener]
 
