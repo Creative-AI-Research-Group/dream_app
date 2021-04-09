@@ -13,5 +13,6 @@ To self run:
 To run with the AI engine:
 
 you will need clone EMRv3 and create its own env so that it can run Tf.Keras
-Then run ``engine.py`` in Terminal using Python 3
+Then run ``engine.py`` in Terminal using Python 3. The server-client will self connect as they share the same host and port info.
+
 
